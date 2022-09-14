@@ -1,31 +1,23 @@
-use crate::elements::{term::Term, element::Element};
+use crate::elements::{alternative::Alternative, element::Element};
 
 #[derive(Debug)]
 pub struct Regex {
-	pub pattern: Vec<Term>
+	pub pattern: Alternative
 }
 
 impl Regex {
-	pub fn new() -> Regex {
-		Regex { pattern: vec![] }
+	pub fn new(regexp: &str) -> Regex {
+		Regex { pattern: <Alternative as Element>::parse(regexp, 0).unwrap().0 }
 	}
 
 	pub fn test(&self, text: &str) -> bool {
 		for i in 0..text.len() {
 			let mut it = text.split_at(i).1.chars();
 
-			let mut matches = true;
-			for atom in &self.pattern {
-				if !atom.test(it.by_ref()) {
-					matches = false;
-					break;
-				}
-			}
-
-			if matches {
+			if self.pattern.test(it.by_ref()) {
 				return true;
 			}
-		}	
+		}
 
 		false
 	}

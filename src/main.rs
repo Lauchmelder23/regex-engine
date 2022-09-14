@@ -1,11 +1,11 @@
-mod parser;
 mod regex;
 mod elements;
 
 use std::env;
+use crate::regex::Regex;
 
 fn print_usage() {
-    println!("Usage: ./regex-engine <regexp>");
+    println!("Usage: ./regex <regexp>");
 }
 
 fn main() {
@@ -17,7 +17,7 @@ fn main() {
     }
     
     let regexp_str = &args[1];
-    let regex = parser::parse(regexp_str);
+    let regex = Regex::new(regexp_str);
 
-    dbg!(regex.test("cringe"));
+    dbg!(regex.test("dsfkrongejdkfd"));
 }
