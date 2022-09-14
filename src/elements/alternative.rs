@@ -1,4 +1,4 @@
-use std::str::Chars;
+use std::{str::Chars, iter::Peekable};
 
 use super::{term::Term, element::{Element, ParseResult}};
 
@@ -31,7 +31,7 @@ impl Element for Alternative {
 		}
 	}
 
-	fn test(&self, it: &mut Chars) -> bool {
+	fn test(&self, it: &mut Peekable<Chars>) -> bool {
 		match &self.alternative {
 			None => {},
 			Some(val) => {

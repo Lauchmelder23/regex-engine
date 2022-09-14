@@ -12,7 +12,7 @@ impl Regex {
 
 	pub fn test(&self, text: &str) -> bool {
 		for i in 0..text.len() {
-			let mut it = text.split_at(i).1.chars();
+			let mut it = text.split_at(i).1.chars().peekable();
 
 			if self.pattern.test(it.by_ref()) {
 				return true;

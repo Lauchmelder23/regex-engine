@@ -19,5 +19,5 @@ fn main() {
     let regexp_str = &args[1];
     let regex = Regex::new(regexp_str);
 
-    dbg!(regex.test("dsfkrongejdkfd"));
+    dbg!(regex.test("criiiing"));
 }

@@ -1,4 +1,4 @@
-use std::str::Chars;
+use std::{str::Chars, iter::Peekable};
 
 use super::element::{Element, ParseResult};
 
@@ -15,6 +15,15 @@ pub struct Atom {
 
 fn is_source_char(c: char) -> bool {
 	!"^$\\.*+?()[]{}|".contains(c)
+}
+
+impl Atom {
+	pub fn test_char(&self, chr: char) -> bool {
+		match self.atom_type  {
+			AtomType::PatternCharacter(c) =>(chr == c),
+			AtomType::Wildcard => true
+		}
+	}
 }
 
 impl Element for Atom {
@@ -42,15 +51,12 @@ impl Element for Atom {
 		}
 	}
 
-	fn test(&self, it: &mut Chars) -> bool {
+	fn test(&self, it: &mut Peekable<Chars>) -> bool {
 		let next_char = match it.next() {
 			None => return false,
 			Some(c) => c
 		};
 		
-		match self.atom_type  {
-			AtomType::PatternCharacter(c) => (next_char == c),
-			AtomType::Wildcard => true
-		}
+		self.test_char(next_char)
 	}
 }
