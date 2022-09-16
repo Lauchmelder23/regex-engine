@@ -2,6 +2,42 @@ use std::{str::FromStr, iter::Peekable, fmt::Display};
 
 use crate::node::{Node, Branch, Quantifier};
 
+static ALTERNATIVE_EMPTY: &'static [u32] = &[
+	b'|' as u32, 
+	b')' as u32
+];
+
+static QUANTIFIERS: &'static [u32] = &[
+	b'*' as u32, 
+	b'+' as u32,
+	b'?' as u32,
+	b'{' as u32,
+];
+
+static ATOM_SPECIAL_CHARS: &'static [u32] = &[
+	b'.' as u32, 
+	b'\\' as u32,
+	b'[' as u32,
+	b'(' as u32,
+];
+
+static NOT_PATTERN_CHARS: &'static [u32] = &[
+	b'^' as u32, 
+	b'$' as u32,
+	b'\\' as u32,
+	b'.' as u32,
+	b'*' as u32,
+	b'+' as u32,
+	b'?' as u32,
+	b'(' as u32,
+	b')' as u32,
+	b'[' as u32,
+	b']' as u32,
+	b'{' as u32,
+	b'}' as u32,
+	b'|' as u32,
+];
+
 #[derive(Debug)]
 pub struct ParserError {
 	text: String
@@ -9,6 +45,7 @@ pub struct ParserError {
 
 impl ParserError {
 	fn new(description: &str) -> ParserError {
+		
 		ParserError {
 			text: String::from_str(description).ok().unwrap_or_default()
 		}
@@ -40,17 +77,17 @@ impl<T> Parser<T> where T: Iterator<Item = u32> + Clone {
 		}
 	}
 
-	fn peek_if_any_of(&mut self, set: &str) -> bool {
+	fn peek_if_any_of(&mut self, set: &[u32]) -> bool {
 		match self.iterator.peek() {
 			None => false,
-			Some(val) => set.contains(char::from_u32(*val).unwrap())
+			Some(val) => set.contains(val)
 		}
 	}
 
-	fn next_if_any_of(&mut self, set: &str) -> Option<T::Item> {
+	fn next_if_any_of(&mut self, set: &[u32]) -> Option<T::Item> {
 		let val = self.iterator.peek()?;
 
-		if set.contains(char::from_u32(*val).unwrap()) {
+		if set.contains(val) {
 			return self.iterator.next();
 		}
 
@@ -77,7 +114,7 @@ impl<T> Parser<T> where T: Iterator<Item = u32> + Clone {
 
 	fn parse_alternative(&mut self) -> ParserResult {
 		let left = self.parse_term()?;
-		let right = match !self.peek_if_any_of("|)") && !self.is_finished() {
+		let right = match !self.peek_if_any_of(ALTERNATIVE_EMPTY) && !self.is_finished() {
 			false => Node::Empty(true).into(),
 			true => { 
 				self.parse_alternative()? 
@@ -102,7 +139,7 @@ impl<T> Parser<T> where T: Iterator<Item = u32> + Clone {
 		}
 
 		let left = self.parse_atom()?;
-		let right = match char::from_u32(self.next_if_any_of("*+?{").unwrap_or_default()).unwrap() {
+		let right = match char::from_u32(self.next_if_any_of(QUANTIFIERS).unwrap_or_default()).unwrap() {
 			'*' => Quantifier::NoneOrMore,
 			'+' => Quantifier::OneOrMore,
 			'?' => Quantifier::OneOrNone,
@@ -114,7 +151,7 @@ impl<T> Parser<T> where T: Iterator<Item = u32> + Clone {
 	}
 
 	fn parse_atom(&mut self) -> ParserResult {
-		match self.next_if_any_of(".\\[(") {
+		match self.next_if_any_of(ATOM_SPECIAL_CHARS) {
 			None => self.parse_pattern_char(),
 
 			Some(c) => Ok(
@@ -138,7 +175,7 @@ impl<T> Parser<T> where T: Iterator<Item = u32> + Clone {
 		match self.iterator.next() {
 			None => Err(ParserError::new("Pattern ended unexpectedly")),
 			Some(c) => {
-				if "^$\\.*+?()[]{}|".contains(char::from_u32(c).unwrap_or_default()) {
+				if NOT_PATTERN_CHARS.contains(&c) {
 					return Err(ParserError::new(format!(
 						"Unexpected symbol '{}' (U+{}) encountered", 
 						char::from_u32(c).unwrap_or_default(), 
