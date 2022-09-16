@@ -40,6 +40,23 @@ impl<T> Parser<T> where T: Iterator<Item = u32> + Clone {
 		}
 	}
 
+	fn peek_if_any_of(&mut self, set: &str) -> bool {
+		match self.iterator.peek() {
+			None => false,
+			Some(val) => set.contains(char::from_u32(*val).unwrap())
+		}
+	}
+
+	fn next_if_any_of(&mut self, set: &str) -> Option<T::Item> {
+		let val = self.iterator.peek()?;
+
+		if set.contains(char::from_u32(*val).unwrap()) {
+			return self.iterator.next();
+		}
+
+		None
+	}
+
 	fn is_finished(&mut self) -> bool {
 		self.iterator.peek().is_none()
 	}
@@ -60,7 +77,7 @@ impl<T> Parser<T> where T: Iterator<Item = u32> + Clone {
 
 	fn parse_alternative(&mut self) -> ParserResult {
 		let left = self.parse_term()?;
-		let right = match !self.peek_if('|') && !self.is_finished() {
+		let right = match !self.peek_if_any_of("|)") && !self.is_finished() {
 			false => Node::Empty(true).into(),
 			true => { 
 				self.parse_alternative()? 
@@ -85,7 +102,7 @@ impl<T> Parser<T> where T: Iterator<Item = u32> + Clone {
 		}
 
 		let left = self.parse_atom()?;
-		let right = match char::from_u32(*self.iterator.peek().unwrap_or(&0)).unwrap_or_default() {
+		let right = match char::from_u32(self.next_if_any_of("*+?{").unwrap_or_default()).unwrap() {
 			'*' => Quantifier::NoneOrMore,
 			'+' => Quantifier::OneOrMore,
 			'?' => Quantifier::OneOrNone,
@@ -97,10 +114,23 @@ impl<T> Parser<T> where T: Iterator<Item = u32> + Clone {
 	}
 
 	fn parse_atom(&mut self) -> ParserResult {
-		match char::from_u32(*self.iterator.peek().unwrap()).unwrap() {
-			'.' => { self.iterator.next(); Ok(Node::AnyCharacter.into()) },
+		match self.next_if_any_of(".\\[(") {
+			None => self.parse_pattern_char(),
 
-			_ => self.parse_pattern_char()
+			Some(c) => Ok(
+				match char::from_u32(c).unwrap() {
+					'.' 	=> Node::AnyCharacter.into(),
+					'\\'	=> self.parse_atom_escape()?,
+					'(' 	=> { 
+						let disjunction = self.parse_disjunction()?;
+						self.iterator.next();
+						disjunction
+					},
+					'[' 	=> todo!(),
+
+					_ 		=> unimplemented!()
+				}
+			)
 		}
 	}
 
@@ -119,6 +149,21 @@ impl<T> Parser<T> where T: Iterator<Item = u32> + Clone {
 				Ok(Node::PatternCharacter(c).into())
 			}
 		}
+	}
+
+	fn parse_atom_escape(&mut self) -> ParserResult {
+		let c = char::from_u32(self.iterator.next().unwrap_or_default()).unwrap();
+
+		if c.is_numeric() {
+			// capoture reference
+			todo!()
+		} else if "dDsSwW".contains(c) {
+			// character class escape
+			todo!()
+		}
+
+		// handle character escape
+		todo!()
 	}
 }
 

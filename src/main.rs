@@ -23,7 +23,8 @@ fn main() {
 
     regex = dbg!(regex);
     println!("/{}/", regexp_str);
-    dbg!(regex.test("cringe"));
+    dbg!(regex.test("criiiinge"));
     dbg!(regex.test("based"));
-    dbg!(regex.test("cronge"));
+    dbg!(regex.test("crooioionge"));
+    dbg!(regex.test("crnge"));
 }
