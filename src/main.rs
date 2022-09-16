@@ -1,8 +1,7 @@
-mod regex;
-mod elements;
+mod parser;
+mod node;
 
-use std::env;
-use crate::regex::Regex;
+use std::{env};
 
 fn print_usage() {
     println!("Usage: ./regex <regexp>");
@@ -17,7 +16,13 @@ fn main() {
     }
     
     let regexp_str = &args[1];
-    let regex = Regex::new(regexp_str);
+    let mut regex = match parser::parse(&regexp_str) {
+        Err(err) => { eprintln!("{}", err); return; },
+        Ok(res) => res
+    };
 
-    dbg!(regex.test("criiiing"));
+    regex = dbg!(regex);
+    println!("/{}/", regexp_str);
+    dbg!(regex.test("cringe"));
+    dbg!(regex.test("based"));
 }
