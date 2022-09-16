@@ -33,6 +33,13 @@ impl<T> Parser<T> where T: Iterator<Item = u32> + Clone {
 		self.iterator.next_if_eq(&c.into()).is_some()
 	}
 
+	fn peek_if(&mut self, c: char) -> bool {
+		match self.iterator.peek() {
+			None => false,
+			Some(val) => val == &u32::from(c)
+		}
+	}
+
 	fn is_finished(&mut self) -> bool {
 		self.iterator.peek().is_none()
 	}
@@ -53,11 +60,12 @@ impl<T> Parser<T> where T: Iterator<Item = u32> + Clone {
 
 	fn parse_alternative(&mut self) -> ParserResult {
 		let left = self.parse_term()?;
-		let right = match !self.consume_if('|') && !self.is_finished() {
+		let right = match !self.peek_if('|') && !self.is_finished() {
 			false => Node::Empty(true).into(),
-			true => self.parse_alternative()?
+			true => { 
+				self.parse_alternative()? 
+			}
 		};
-
 		Ok(Node::Alternative(left, right).into())
 	}
 
@@ -89,7 +97,28 @@ impl<T> Parser<T> where T: Iterator<Item = u32> + Clone {
 	}
 
 	fn parse_atom(&mut self) -> ParserResult {
-		Ok(Node::PatternCharacter(self.iterator.next().unwrap()).into())
+		match char::from_u32(*self.iterator.peek().unwrap()).unwrap() {
+			'.' => { self.iterator.next(); Ok(Node::AnyCharacter.into()) },
+
+			_ => self.parse_pattern_char()
+		}
+	}
+
+	fn parse_pattern_char(&mut self) -> ParserResult {
+		match self.iterator.next() {
+			None => Err(ParserError::new("Pattern ended unexpectedly")),
+			Some(c) => {
+				if "^$\\.*+?()[]{}|".contains(char::from_u32(c).unwrap_or_default()) {
+					return Err(ParserError::new(format!(
+						"Unexpected symbol '{}' (U+{}) encountered", 
+						char::from_u32(c).unwrap_or_default(), 
+						c
+					).as_str()));
+				}
+
+				Ok(Node::PatternCharacter(c).into())
+			}
+		}
 	}
 }
 

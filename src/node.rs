@@ -7,6 +7,7 @@ pub enum Node {
     Empty(bool),
 
     PatternCharacter(u32),
+    AnyCharacter,
 
 	Disjunction(Branch, Branch),
 	Alternative(Branch, Branch),
@@ -85,10 +86,14 @@ impl Node {
                 &data[cur_pos] == c
             }
 
-
+            Self::AnyCharacter => {
+                *pos += 1;
+                true
+            }
 
             Self::Disjunction(left, right) => {
-                left.eval(data, pos) || right.eval(data, pos)
+                let mut orig_pos = *pos;
+                left.eval(data, pos) || right.eval(data, &mut orig_pos)
             }
 
             Self::Alternative(left, right) => {

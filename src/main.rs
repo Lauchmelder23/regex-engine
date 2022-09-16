@@ -25,4 +25,5 @@ fn main() {
     println!("/{}/", regexp_str);
     dbg!(regex.test("cringe"));
     dbg!(regex.test("based"));
+    dbg!(regex.test("cronge"));
 }
