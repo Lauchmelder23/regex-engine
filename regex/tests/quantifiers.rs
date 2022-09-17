@@ -66,3 +66,21 @@ fn test_multiple() {
 	assert_regex_ne!(regex, "Parisisa");
 	assert_regex_ne!(regex, "Parsi");
 }
+
+#[test]
+fn test_wildcard() {
+	let regex = util::setup("P.+ris");
+
+	assert_regex_eq!(regex, "Paris");
+	assert_regex_eq!(regex, "Paoris");
+	assert_regex_eq!(regex, "Pawawaris");
+
+	let nested = util::setup("P(a.+)+ris");
+
+	assert_regex_eq!(nested, "Parris");
+	assert_regex_eq!(nested, "Paorairis");
+	assert_regex_eq!(nested, "Pawawaris");
+
+	assert_regex_ne!(nested, "Paris");
+	assert_regex_ne!(nested, "Paoaris");
+}

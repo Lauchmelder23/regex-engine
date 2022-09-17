@@ -15,19 +15,10 @@ fn main() {
     }
     
     let regexp_str = &args[1];
-    let mut regex = match regex::new("Ba(na)+na") {
+    let mut regex = match regex::new("P(a.+)+ris") {
         Err(err) => { eprintln!("{}", err); return; },
         Ok(res) => res
     };
 
-    // regex = dbg!(regex);
-    // println!("/{}/", regexp_str);
-    // dbg!(regex.test("criiiinge"));
-    // dbg!(regex.test("based"));
-    // dbg!(regex.test("crooioionge"));
-    // dbg!(regex.test("crnge"));
-    dbg!(regex.test("Ba"));
-    dbg!(regex.test("Banana"));
-    dbg!(regex.test("Banananananana"));
-    dbg!(regex.test("Banannnnaan"));
+    dbg!(regex.test("Parris"));
 }
