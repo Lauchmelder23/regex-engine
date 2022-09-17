@@ -229,16 +229,6 @@ impl<T> Parser<T> where T: Iterator<Item = u32> + Clone {
 	}
 }
 
-/// Parses a regex pattern into an expression tree
-/// 
-/// # Arguments
-/// 
-/// * `regex` - A string slice that holds a regex pattern
-/// 
-/// # Examples
-/// ```
-/// let regex = parse("Hell.* world");
-/// ```
 pub fn parse(regex: &str) -> ParserResult {
 	let mut parser = Parser {
 		iterator: regex.chars().map(u32::from).peekable()

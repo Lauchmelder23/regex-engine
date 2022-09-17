@@ -1,10 +1,9 @@
-mod parser;
-mod node;
+extern crate regex;
 
 use std::{env};
 
 fn print_usage() {
-    println!("Usage: ./regex <regexp>");
+    println!("Usage: ./regex-cli <regexp>");
 }
 
 fn main() {
@@ -16,7 +15,7 @@ fn main() {
     }
     
     let regexp_str = &args[1];
-    let mut regex = match parser::parse("Ba(na*)+") {
+    let mut regex = match regex::new("Ba(na)+na") {
         Err(err) => { eprintln!("{}", err); return; },
         Ok(res) => res
     };
@@ -29,6 +28,6 @@ fn main() {
     // dbg!(regex.test("crnge"));
     dbg!(regex.test("Ba"));
     dbg!(regex.test("Banana"));
-    dbg!(regex.test("Banaaaaanaaanaaana"));
+    dbg!(regex.test("Banananananana"));
     dbg!(regex.test("Banannnnaan"));
 }
