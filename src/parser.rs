@@ -66,10 +66,12 @@ struct Parser<T> where T: Iterator<Item = u32> + Clone {
 }
 
 impl<T> Parser<T> where T: Iterator<Item = u32> + Clone {
+	// Checks whether the next character is equal to c. If yes, it is consumed
 	fn consume_if(&mut self, c: char) -> bool {
 		self.iterator.next_if_eq(&c.into()).is_some()
 	}
 
+	// Check if the next character is equal to c
 	fn peek_if(&mut self, c: char) -> bool {
 		match self.iterator.peek() {
 			None => false,
@@ -77,6 +79,7 @@ impl<T> Parser<T> where T: Iterator<Item = u32> + Clone {
 		}
 	}
 
+	// Check if the nect character is equal to any char in the set
 	fn peek_if_any_of(&mut self, set: &[u32]) -> bool {
 		match self.iterator.peek() {
 			None => false,
@@ -84,6 +87,7 @@ impl<T> Parser<T> where T: Iterator<Item = u32> + Clone {
 		}
 	}
 
+	// Advance iterator if character is equal to any char in the set
 	fn next_if_any_of(&mut self, set: &[u32]) -> Option<T::Item> {
 		let val = self.iterator.peek()?;
 
@@ -94,14 +98,18 @@ impl<T> Parser<T> where T: Iterator<Item = u32> + Clone {
 		None
 	}
 
+	// Check if iterator has reached the end of the string
 	fn is_finished(&mut self) -> bool {
 		self.iterator.peek().is_none()
 	}
 	
+	// Parse the string represented by the iterator
 	fn parse(&mut self) -> ParserResult {
 		self.parse_disjunction()
 	}
 
+	// Parse a disjunction.
+	// Disjunctions are disjunctions of alternatives
 	fn parse_disjunction(&mut self) -> ParserResult {
 		let left = self.parse_alternative()?;
 		let right = match self.consume_if('|') {
@@ -112,17 +120,28 @@ impl<T> Parser<T> where T: Iterator<Item = u32> + Clone {
 		Ok(Node::Disjunction(left, right).into())
 	}
 
+	// Parse alternative
+	// Alternatives are sequences of terms
 	fn parse_alternative(&mut self) -> ParserResult {
-		let left = self.parse_term()?;
-		let right = match !self.peek_if_any_of(ALTERNATIVE_EMPTY) && !self.is_finished() {
-			false => Node::Empty(true).into(),
-			true => { 
-				self.parse_alternative()? 
-			}
+		let mut terms = vec![];
+		while !self.peek_if_any_of(ALTERNATIVE_EMPTY) && !self.is_finished() {
+			// let term = ;
+			terms.push(self.parse_term()?);
 		};
-		Ok(Node::Alternative(left, right).into())
+		
+		let mut alternative = terms.iter().rfold(Node::Empty(true).into(), |acc, term| {
+			match &**term {
+				Node::Term(atom, quantifier, _) => Node::Term(atom.clone(), *quantifier, acc).into(),
+				_ => unimplemented!()
+			}	
+		});
+
+		alternative = dbg!(alternative);
+		Ok(alternative)
 	}
 
+	// Parse term
+	// Terms are either assertions, or atoms (with out without quantifiers)
 	fn parse_term(&mut self) -> ParserResult {
 		let tmp = self.iterator.clone()
 			.take(2)
@@ -138,18 +157,20 @@ impl<T> Parser<T> where T: Iterator<Item = u32> + Clone {
 			todo!()
 		}
 
-		let left = self.parse_atom()?;
-		let right = match char::from_u32(self.next_if_any_of(QUANTIFIERS).unwrap_or_default()).unwrap() {
-			'*' => Quantifier::NoneOrMore,
-			'+' => Quantifier::OneOrMore,
-			'?' => Quantifier::OneOrNone,
+		let atom = self.parse_atom()?;
+		let quantifier = match char::from_u32(self.next_if_any_of(QUANTIFIERS).unwrap_or_default()).unwrap() {
+			'*' => Quantifier::new(0, usize::MAX, true),
+			'+' => Quantifier::new(1, usize::MAX, true),
+			'?' => Quantifier::new(0, 1, true),
 			'{' => todo!(),
-			_ => Quantifier::One
+			_ => Quantifier::new(1, 1, true)
 		};
 
-		Ok(Node::Atom(left, right).into())
+		Ok(Node::Term(atom, quantifier, Node::Empty(true).into()).into())
 	}
 
+	// Parse atom
+	// Atoms are characters, classes, capture groups etc
 	fn parse_atom(&mut self) -> ParserResult {
 		match self.next_if_any_of(ATOM_SPECIAL_CHARS) {
 			None => self.parse_pattern_char(),
@@ -171,6 +192,8 @@ impl<T> Parser<T> where T: Iterator<Item = u32> + Clone {
 		}
 	}
 
+	// Parse PatternCharacter
+	// A PatternCharacter is any unicode char that is not a regex control character
 	fn parse_pattern_char(&mut self) -> ParserResult {
 		match self.iterator.next() {
 			None => Err(ParserError::new("Pattern ended unexpectedly")),
@@ -188,6 +211,8 @@ impl<T> Parser<T> where T: Iterator<Item = u32> + Clone {
 		}
 	}
 
+	// Parse AtomEscape
+	// AtomEscapes are either normal escapes, or capturing references, or unicode escapes
 	fn parse_atom_escape(&mut self) -> ParserResult {
 		let c = char::from_u32(self.iterator.next().unwrap_or_default()).unwrap();
 
@@ -204,6 +229,16 @@ impl<T> Parser<T> where T: Iterator<Item = u32> + Clone {
 	}
 }
 
+/// Parses a regex pattern into an expression tree
+/// 
+/// # Arguments
+/// 
+/// * `regex` - A string slice that holds a regex pattern
+/// 
+/// # Examples
+/// ```
+/// let regex = parse("Hell.* world");
+/// ```
 pub fn parse(regex: &str) -> ParserResult {
 	let mut parser = Parser {
 		iterator: regex.chars().map(u32::from).peekable()

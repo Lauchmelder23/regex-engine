@@ -1,8 +1,6 @@
-use std::{str::Chars, iter::Peekable};
-
 pub type Branch = Box<Node>;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Node {
     Empty(bool),
 
@@ -10,99 +8,124 @@ pub enum Node {
     AnyCharacter,
 
 	Disjunction(Branch, Branch),
-	Alternative(Branch, Branch),
-    Atom(Branch, Quantifier),
+    Term(Branch, Quantifier, Branch)
 }
 
-#[derive(Debug)]
-pub enum Quantifier {
-    One,
-    OneOrNone,
-    OneOrMore,
-    NoneOrMore,
-    Range(usize, usize)
+#[derive(Debug, Copy, Clone)]
+pub struct Quantifier {
+    min: usize,
+    max: usize,
+    greedy: bool
 }
 
 impl Quantifier {
-    fn eval(&self, atom: &Branch, data: &Vec<u32>, pos: &mut usize) -> bool {
-        match self {
-            Self::One => atom.eval(data, pos),
-
-            Self::OneOrNone => {
-                let old_pos = pos.clone();
-                if !atom.eval(data, pos) {
-                    *pos = old_pos;
-                }
-
-                true
-            }
-
-            Self::OneOrMore => {
-                if !atom.eval(data, pos) {
-                    return false;
-                }
-
-                loop {
-                    let old_pos = pos.clone();
-                    if !atom.eval(data, pos) {
-                        *pos = old_pos;
-                        break
-                    }
-                }
-
-                true
-            }
-
-            Self::NoneOrMore => {
-                loop {
-                    let old_pos = pos.clone();
-                    if !atom.eval(data, pos) {
-                        *pos = old_pos;
-                        break
-                    }
-                }
-
-                true
-            },
-
-            _ => todo!()
-        }
+    pub fn new(min: usize, max: usize, greedy: bool) -> Quantifier {
+        Quantifier { min: min, max: max, greedy: greedy }
     }
 }
 
 impl Node {
-    pub fn test(&self, input: &str) -> bool {
-        self.eval(&input.chars().map(|c| u32::from(c)).collect(), &mut 0)
+    pub fn test(&self, input: &str) -> usize {
+        self.eval(&input.chars().map(|c| u32::from(c)).collect(), 0).unwrap_or(usize::MAX)
     }
 
-    fn eval(&self, data: &Vec<u32>, pos: &mut usize) -> bool {
+    fn eval(&self, data: &Vec<u32>, pos: usize) -> Option<usize> {
         match self {
-            Self::Empty(b) => *b,
+            Self::Empty(b) => {
+                if *b {
+                    Some(pos)
+                } else {
+                    None 
+                }
+            },
 
-
+ 
             Self::PatternCharacter(c) => {
-                let cur_pos = *pos;
-                *pos += 1;
-                &data[cur_pos] == c
+                if pos >= data.len() {
+                    return None;
+                }
+
+                if &data[pos] == c {
+                    Some(pos + 1)
+                } else {
+                    None
+                }
             }
 
             Self::AnyCharacter => {
-                *pos += 1;
-                true
+                if pos < data.len() {
+                    Some(pos + 1)
+                } else {
+                    None
+                }
             }
 
             Self::Disjunction(left, right) => {
-                let mut orig_pos = *pos;
-                left.eval(data, pos) || right.eval(data, &mut orig_pos)
+                match left.eval(data, pos) {
+                    Some(new_pos) => Some(new_pos),
+                    None => right.eval(data, pos)
+                }
             }
 
-            Self::Alternative(left, right) => {
-                left.eval(data, pos) && right.eval(data, pos)
+            Self::Term(atom, quantifier, remainder) => {
+                self.eval_quantifier(pos, atom, quantifier, remainder, data, pos)
+            }
+        }
+    }
+
+    fn eval_quantifier(
+        &self, 
+        parent_pos: usize,
+        atom: &Box<Node>, 
+        quantifier: &Quantifier, 
+        remainder: &Box<Node>, 
+        data: &Vec<u32>, 
+        mut pos: usize
+    ) -> Option<usize> {
+        let mut repetitions = pos - parent_pos;
+        while repetitions + 1 < quantifier.min {
+            pos = atom.eval(data, pos)?;
+            repetitions += 1;
+        }
+
+        match quantifier.greedy {
+            true => {
+                // Try matching atom as often as possible
+                let mut match_history = vec![];
+                let old_pos = pos;
+                for _ in 0..quantifier.max {
+                    match atom.eval(data, pos) {
+                        None => break,
+                        Some(new_pos) => {
+                            match_history.push(new_pos);
+                            pos = new_pos;
+                        }
+                    }
+                }
+
+                // If array size is smaller than min, matching failed
+                if match_history.len() < quantifier.min {
+                    return None;
+                }
+
+                // Try matching remainder at positions, starting from the back
+                for matching_pos in match_history.iter().rev() {
+                    //print!("{} -> ", matching_pos);
+                    match remainder.eval(data, *matching_pos) {
+                        None => {},
+                        Some(new_pos) => { 
+                            return Some(new_pos); 
+                        }
+                    }
+                }
+
+                if quantifier.min != 0 {
+                    return None;
+                }
+
+                remainder.eval(data, old_pos)
             },
-
-            Self::Atom(left, quantifier) => {
-                quantifier.eval(left, data, pos)
-            }
+            false => todo!()
         }
     }
 }

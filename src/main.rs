@@ -16,15 +16,19 @@ fn main() {
     }
     
     let regexp_str = &args[1];
-    let mut regex = match parser::parse(&regexp_str) {
+    let mut regex = match parser::parse("Ba(na*)+") {
         Err(err) => { eprintln!("{}", err); return; },
         Ok(res) => res
     };
 
-    regex = dbg!(regex);
-    println!("/{}/", regexp_str);
-    dbg!(regex.test("criiiinge"));
-    dbg!(regex.test("based"));
-    dbg!(regex.test("crooioionge"));
-    dbg!(regex.test("crnge"));
+    // regex = dbg!(regex);
+    // println!("/{}/", regexp_str);
+    // dbg!(regex.test("criiiinge"));
+    // dbg!(regex.test("based"));
+    // dbg!(regex.test("crooioionge"));
+    // dbg!(regex.test("crnge"));
+    dbg!(regex.test("Ba"));
+    dbg!(regex.test("Banana"));
+    dbg!(regex.test("Banaaaaanaaanaaana"));
+    dbg!(regex.test("Banannnnaan"));
 }
