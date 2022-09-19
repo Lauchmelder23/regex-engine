@@ -1,6 +1,6 @@
-use std::{str::FromStr, iter::Peekable, fmt::Display};
+use std::{str::FromStr, iter::Peekable, fmt::Display, rc::Rc, thread::current};
 
-use crate::node::{Node, Branch, Quantifier};
+use crate::graph::{Node, Graph, Condition, Edge, GraphNode};
 
 static ALTERNATIVE_EMPTY: &'static [u32] = &[
 	b'|' as u32, 
@@ -58,11 +58,12 @@ impl Display for ParserError {
     }
 }
 
-pub type ParserResult = Result<Branch, ParserError>;
+pub type ParserResult = Result<GraphNode, ParserError>;
 
 #[derive(Debug)]
 struct Parser<T> where T: Iterator<Item = u32> + Clone {
-	iterator: Peekable<T>
+	iterator: Peekable<T>,
+	graph: Graph
 }
 
 impl<T> Parser<T> where T: Iterator<Item = u32> + Clone {
@@ -104,97 +105,101 @@ impl<T> Parser<T> where T: Iterator<Item = u32> + Clone {
 	}
 	
 	// Parse the string represented by the iterator
-	fn parse(&mut self) -> ParserResult {
-		self.parse_disjunction()
+	fn parse(&mut self) -> Result<Graph, ParserError> {
+		let base = self.parse_disjunction()?;
+		self.graph.set_start_node(&base);
+
+		Ok(self.graph.clone())
 	}
 
 	// Parse a disjunction.
 	// Disjunctions are disjunctions of alternatives
 	fn parse_disjunction(&mut self) -> ParserResult {
-		let left = self.parse_alternative()?;
-		let right = match self.consume_if('|') {
-			false => Node::Empty(false).into(),
-			true => self.parse_disjunction()?
-		};
+		let mut alternatives: Vec<GraphNode> = vec![];
+		let alt = self.parse_alternative()?;
+		alternatives.push(alt.clone());
 
-		Ok(Node::Disjunction(left, right).into())
+		while self.consume_if('|') {
+			alternatives.push(self.parse_alternative()?);
+		}
+
+		let disjunction = Node::new();
+		let disjunction = self.graph.add_node(disjunction);
+
+		{
+			let mut cell = disjunction.borrow_mut();
+			alternatives.into_iter().for_each(|item| {
+				cell.add_edge(Edge::new(&item, Condition::NonConsuming))
+			});
+		}
+
+		Ok(disjunction)
 	}
 
 	// Parse alternative
 	// Alternatives are sequences of terms
 	fn parse_alternative(&mut self) -> ParserResult {
-		let mut terms = vec![];
-		while !self.peek_if_any_of(ALTERNATIVE_EMPTY) && !self.is_finished() {
-			// let term = ;
-			terms.push(self.parse_term()?);
-		};
-		
-		let mut alternative = terms.iter().rfold(Node::Empty(true).into(), |acc, term| {
-			match &**term {
-				Node::Term(atom, quantifier, _) => Node::Term(atom.clone(), *quantifier, acc).into(),
-				_ => unimplemented!()
-			}	
-		});
+		let alternative = self.graph.add_node(Node::new());
+		let term = self.parse_term(alternative)?;
 
-		alternative = dbg!(alternative);
-		Ok(alternative)
+		Ok(term)
 	}
 
 	// Parse term
 	// Terms are either assertions, or atoms (with out without quantifiers)
-	fn parse_term(&mut self) -> ParserResult {
-		let tmp = self.iterator.clone()
-			.take(2)
-			.map(|n| char::from_u32(n).unwrap_or_default())
-			.collect::<String>();
+	fn parse_term(&mut self, base: GraphNode) -> ParserResult {
+		let mut current_node = base.clone();
 
-		if tmp.starts_with('^') ||
-			tmp.starts_with('$') ||
-			tmp == "\\b" ||
-			tmp == "\\B" ||
-			tmp == "(?" 
-		{
-			todo!()
-		}
+		while !self.peek_if_any_of(ALTERNATIVE_EMPTY) && !self.is_finished() {
+			let tmp = self.iterator.clone()
+				.take(2)
+				.map(|n| char::from_u32(n).unwrap_or_default())
+				.collect::<String>();
 
-		let atom = self.parse_atom()?;
-		let quantifier = match char::from_u32(self.next_if_any_of(QUANTIFIERS).unwrap_or_default()).unwrap() {
-			'*' => Quantifier::new(0, usize::MAX, true),
-			'+' => Quantifier::new(1, usize::MAX, true),
-			'?' => Quantifier::new(0, 1, true),
-			'{' => todo!(),
-			_ => Quantifier::new(1, 1, true)
+			if tmp.starts_with('^') ||
+				tmp.starts_with('$') ||
+				tmp == "\\b" ||
+				tmp == "\\B" ||
+				tmp == "(?" 
+			{
+				todo!()
+			}
+
+			let atom = self.parse_atom(&current_node)?;
+
+			{
+				let mut cell = atom.borrow_mut();
+				match char::from_u32(self.next_if_any_of(QUANTIFIERS).unwrap_or_default()).unwrap() {
+					'*' => cell.add_edge(Edge::new(&current_node, Condition::Epsilon)),
+					'+' => todo!(),
+					'?' => todo!(),
+					'{' => todo!(),
+					_ => {}
+				};
+			}
+
+			current_node = atom;
 		};
 
-		Ok(Node::Term(atom, quantifier, Node::Empty(true).into()).into())
+		current_node.borrow_mut().add_edge(Edge::new(
+			&self.graph.add_node(Node::new()),
+			Condition::NonConsuming
+		));
+		
+		Ok(base)
 	}
 
-	// Parse atom
-	// Atoms are characters, classes, capture groups etc
-	fn parse_atom(&mut self) -> ParserResult {
-		match self.next_if_any_of(ATOM_SPECIAL_CHARS) {
-			None => self.parse_pattern_char(),
+	fn parse_atom(&mut self, base: &GraphNode) -> ParserResult {
+		let c = self.parse_pattern_char()?;
 
-			Some(c) => Ok(
-				match char::from_u32(c).unwrap() {
-					'.' 	=> Node::AnyCharacter.into(),
-					'\\'	=> self.parse_atom_escape()?,
-					'(' 	=> { 
-						let disjunction = self.parse_disjunction()?;
-						self.iterator.next();
-						disjunction
-					},
-					'[' 	=> todo!(),
-
-					_ 		=> unimplemented!()
-				}
-			)
-		}
+		let new_node = self.graph.add_node(Node::new());
+		base.borrow_mut().add_edge(Edge::new(&new_node, Condition::Character(c)));
+		Ok(new_node)
 	}
 
 	// Parse PatternCharacter
 	// A PatternCharacter is any unicode char that is not a regex control character
-	fn parse_pattern_char(&mut self) -> ParserResult {
+	fn parse_pattern_char(&mut self) -> Result<u32, ParserError> {
 		match self.iterator.next() {
 			None => Err(ParserError::new("Pattern ended unexpectedly")),
 			Some(c) => {
@@ -206,7 +211,7 @@ impl<T> Parser<T> where T: Iterator<Item = u32> + Clone {
 					).as_str()));
 				}
 
-				Ok(Node::PatternCharacter(c).into())
+				Ok(c)
 			}
 		}
 	}
@@ -229,9 +234,10 @@ impl<T> Parser<T> where T: Iterator<Item = u32> + Clone {
 	}
 }
 
-pub fn parse(regex: &str) -> ParserResult {
+pub fn parse(regex: &str) -> Result<Graph, ParserError> {
 	let mut parser = Parser {
-		iterator: regex.chars().map(u32::from).peekable()
+		iterator: regex.chars().map(u32::from).peekable(),
+		graph: Graph::new()
 	};
 
 	parser.parse()

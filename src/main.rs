@@ -2,6 +2,8 @@ extern crate regex;
 
 use std::{env};
 
+use regex::regex::Regex;
+
 fn print_usage() {
     println!("Usage: ./regex-cli <regexp>");
 }
@@ -15,10 +17,10 @@ fn main() {
     }
     
     let regexp_str = &args[1];
-    let mut regex = match regex::new("P(a.+)+ris") {
+    let regex = match Regex::new(regexp_str) {
         Err(err) => { eprintln!("{}", err); return; },
         Ok(res) => res
     };
 
-    dbg!(regex.test("Parris"));
+    dbg!(regex.test("abbb"));
 }
