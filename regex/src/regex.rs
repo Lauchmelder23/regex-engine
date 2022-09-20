@@ -1,6 +1,4 @@
-use std::{rc::Rc};
-
-use crate::{graph::{Graph, GraphNode, Node, Edge, State}, parser::{ParserError, self}};
+use crate::{graph::{Graph, State}, parser::{ParserError, self}};
 
 #[derive(Debug)]
 pub struct Regex {

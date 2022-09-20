@@ -1,6 +1,6 @@
-use std::{str::FromStr, iter::Peekable, fmt::Display, rc::Rc, thread::current};
+use std::{str::FromStr, iter::Peekable, fmt::Display};
 
-use crate::graph::{Node, Graph, Condition, Edge, GraphNode};
+use crate::graph::{Graph, Condition, Edge, GraphNode};
 
 static ALTERNATIVE_EMPTY: &'static [u32] = &[
 	b'|' as u32, 
@@ -70,14 +70,6 @@ impl<T> Parser<T> where T: Iterator<Item = u32> + Clone {
 	// Checks whether the next character is equal to c. If yes, it is consumed
 	fn consume_if(&mut self, c: char) -> bool {
 		self.iterator.next_if_eq(&c.into()).is_some()
-	}
-
-	// Check if the next character is equal to c
-	fn peek_if(&mut self, c: char) -> bool {
-		match self.iterator.peek() {
-			None => false,
-			Some(val) => val == &u32::from(c)
-		}
 	}
 
 	// Check if the nect character is equal to any char in the set
@@ -187,19 +179,26 @@ impl<T> Parser<T> where T: Iterator<Item = u32> + Clone {
 	}
 
 	fn parse_atom(&mut self, base: &GraphNode) -> ParserResult {
-		if self.consume_if('(') {
-			let disjunction = self.parse_disjunction(base)?;
-			if !self.consume_if(')') {
-				return Err(ParserError::new("Expected ')'"));
-			}
+		match char::from_u32(self.next_if_any_of(ATOM_SPECIAL_CHARS).unwrap_or_default()).unwrap() {
+			'(' => {
+				let disjunction = self.parse_disjunction(base)?;
+				if !self.consume_if(')') {
+					return Err(ParserError::new("Expected ')'"));
+				}
 
-			return Ok(disjunction);
-		}
+				return Ok(disjunction);
+			},
 
-		if self.consume_if('.') {
-			let new_node = self.graph.add_node();
-			base.borrow_mut().add_edge(0, Edge::new(&new_node, Condition::AnyCharacter));
-			return Ok(new_node);
+			'.' => {
+				let new_node = self.graph.add_node();
+				base.borrow_mut().add_edge(0, Edge::new(&new_node, Condition::AnyCharacter));
+				return Ok(new_node);
+			},
+
+			'\\' => todo!(),
+			'[' => todo!(),
+
+			_ => {}
 		}
 
 		let c = self.parse_pattern_char()?;
@@ -226,23 +225,6 @@ impl<T> Parser<T> where T: Iterator<Item = u32> + Clone {
 				Ok(c)
 			}
 		}
-	}
-
-	// Parse AtomEscape
-	// AtomEscapes are either normal escapes, or capturing references, or unicode escapes
-	fn parse_atom_escape(&mut self) -> ParserResult {
-		let c = char::from_u32(self.iterator.next().unwrap_or_default()).unwrap();
-
-		if c.is_numeric() {
-			// capoture reference
-			todo!()
-		} else if "dDsSwW".contains(c) {
-			// character class escape
-			todo!()
-		}
-
-		// handle character escape
-		todo!()
 	}
 }
 
