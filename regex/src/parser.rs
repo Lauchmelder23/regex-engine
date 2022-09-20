@@ -106,7 +106,9 @@ impl<T> Parser<T> where T: Iterator<Item = u32> + Clone {
 	
 	// Parse the string represented by the iterator
 	fn parse(&mut self) -> Result<Graph, ParserError> {
-		let base = self.parse_disjunction()?;
+		let base = self.graph.add_node();
+		self.parse_disjunction(&base)?;
+
 		self.graph.set_start_node(&base);
 
 		Ok(self.graph.clone())
@@ -114,40 +116,29 @@ impl<T> Parser<T> where T: Iterator<Item = u32> + Clone {
 
 	// Parse a disjunction.
 	// Disjunctions are disjunctions of alternatives
-	fn parse_disjunction(&mut self) -> ParserResult {
-		let mut alternatives: Vec<GraphNode> = vec![];
-		let alt = self.parse_alternative()?;
-		alternatives.push(alt.clone());
+	fn parse_disjunction(&mut self, base: &GraphNode) -> ParserResult {
+		let mut terms: Vec<GraphNode> = vec![];
+		let term = self.parse_term(base)?;
+		terms.push(term.clone());
 
 		while self.consume_if('|') {
-			alternatives.push(self.parse_alternative()?);
+			terms.push(self.parse_term(base)?);
 		}
 
-		let disjunction = Node::new();
-		let disjunction = self.graph.add_node(disjunction);
+		let end_node = self.graph.add_node();
 
 		{
-			let mut cell = disjunction.borrow_mut();
-			alternatives.into_iter().for_each(|item| {
-				cell.add_edge(Edge::new(&item, Condition::NonConsuming))
+			terms.into_iter().for_each(|item| {
+				item.borrow_mut().push_edge(Edge::new(&end_node, Condition::Epsilon));
 			});
 		}
 
-		Ok(disjunction)
-	}
-
-	// Parse alternative
-	// Alternatives are sequences of terms
-	fn parse_alternative(&mut self) -> ParserResult {
-		let alternative = self.graph.add_node(Node::new());
-		let term = self.parse_term(alternative)?;
-
-		Ok(term)
+		Ok(end_node)
 	}
 
 	// Parse term
 	// Terms are either assertions, or atoms (with out without quantifiers)
-	fn parse_term(&mut self, base: GraphNode) -> ParserResult {
+	fn parse_term(&mut self, base: &GraphNode) -> ParserResult {
 		let mut current_node = base.clone();
 
 		while !self.peek_if_any_of(ALTERNATIVE_EMPTY) && !self.is_finished() {
@@ -166,34 +157,55 @@ impl<T> Parser<T> where T: Iterator<Item = u32> + Clone {
 			}
 
 			let atom = self.parse_atom(&current_node)?;
+			let mut next_node = atom.clone();
 
 			{
 				let mut cell = atom.borrow_mut();
 				match char::from_u32(self.next_if_any_of(QUANTIFIERS).unwrap_or_default()).unwrap() {
-					'*' => cell.add_edge(Edge::new(&current_node, Condition::Epsilon)),
-					'+' => todo!(),
+					'+' => { 
+						cell.push_edge(Edge::new(&current_node, Condition::Epsilon));
+					},
+					'*' => {
+						let exit_node = self.graph.add_node();
+						cell.push_edge(Edge::new(&exit_node, Condition::Epsilon));
+						cell.push_edge(Edge::new(&current_node, Condition::Epsilon));
+
+						current_node.borrow_mut().add_edge(0, Edge::new(&exit_node, Condition::Epsilon));
+
+						next_node = exit_node.clone();
+					},
 					'?' => todo!(),
 					'{' => todo!(),
 					_ => {}
 				};
 			}
 
-			current_node = atom;
+			current_node = next_node;
 		};
 
-		current_node.borrow_mut().add_edge(Edge::new(
-			&self.graph.add_node(Node::new()),
-			Condition::NonConsuming
-		));
-		
-		Ok(base)
+		Ok(current_node)
 	}
 
 	fn parse_atom(&mut self, base: &GraphNode) -> ParserResult {
+		if self.consume_if('(') {
+			let disjunction = self.parse_disjunction(base)?;
+			if !self.consume_if(')') {
+				return Err(ParserError::new("Expected ')'"));
+			}
+
+			return Ok(disjunction);
+		}
+
+		if self.consume_if('.') {
+			let new_node = self.graph.add_node();
+			base.borrow_mut().add_edge(0, Edge::new(&new_node, Condition::AnyCharacter));
+			return Ok(new_node);
+		}
+
 		let c = self.parse_pattern_char()?;
 
-		let new_node = self.graph.add_node(Node::new());
-		base.borrow_mut().add_edge(Edge::new(&new_node, Condition::Character(c)));
+		let new_node = self.graph.add_node();
+		base.borrow_mut().add_edge(0, Edge::new(&new_node, Condition::Character(c)));
 		Ok(new_node)
 	}
 

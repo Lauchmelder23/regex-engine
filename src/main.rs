@@ -22,5 +22,5 @@ fn main() {
         Ok(res) => res
     };
 
-    dbg!(regex.test("abbb"));
+    dbg!(regex.test("Banaananaaa"));
 }

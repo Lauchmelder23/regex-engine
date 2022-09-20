@@ -1,11 +1,10 @@
-use std::{rc::{Rc, Weak}, cell::RefCell};
+use std::{rc::{Rc, Weak}, cell::RefCell, fmt::Display};
 
 #[derive(Debug, Clone, Copy)]
 pub enum Condition {
     Character(u32),
-    Epsilon,
-
-    NonConsuming
+    AnyCharacter,
+    Epsilon
 }
 
 #[derive(Debug)]
@@ -30,22 +29,11 @@ impl Edge {
 
     pub fn try_traverse(&self, data: &Vec<u32>, state: &State) -> Option<State> {
         match self.condition {
-            Condition::NonConsuming => {
+            Condition::Epsilon => {
                 return Some(State { 
                     node: self.to.clone(), 
                     pos: state.pos 
                 });
-            },
-
-            Condition::Epsilon => {
-                if state.pos >= data.len() {
-                    return None;
-                }
-
-                return Some(State {
-                    node: self.to.clone(),
-                    pos: state.pos + 1
-                })
             },
 
             Condition::Character(ch) => {
@@ -59,7 +47,17 @@ impl Edge {
                         pos: state.pos + 1
                     })
                 }
+            },
+
+            Condition::AnyCharacter => {
+                if state.pos < data.len() {
+                    return Some(State {
+                        node: self.to.clone(),
+                        pos: state.pos + 1
+                    });
+                }
             }
+
         }
 
         None
@@ -68,16 +66,27 @@ impl Edge {
 
 #[derive(Debug, Clone)]
 pub struct Node {
+    id: usize,
     edges: Vec<Edge>
 }
 
+impl Display for Node {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.id)
+    }
+}
+
 impl Node {
-    pub fn new() -> Node {
-        Node { edges: vec![] }
+    pub fn new(id: usize) -> Node {
+        Node { edges: vec![], id: id }
     }
 
-    pub fn add_edge(&mut self, edge: Edge) {
+    pub fn push_edge(&mut self, edge: Edge) {
         self.edges.push(edge);
+    }
+
+    pub fn add_edge(&mut self, position: usize, edge: Edge) {
+        self.edges.insert(position, edge);
     }
 
     pub fn get_edges(&self) -> std::slice::Iter<'_, Edge>{
@@ -93,6 +102,7 @@ pub type GraphNode = Rc<RefCell<Node>>;
 
 #[derive(Debug, Clone)]
 pub struct Graph {
+    next_id: usize,
     nodes: Vec<GraphNode>,
     start: Option<GraphNode>
 }
@@ -100,14 +110,16 @@ pub struct Graph {
 impl Graph {
     pub fn new() -> Graph {
         Graph {
+            next_id: 0,
             nodes: vec![],
             start: None
         }
     }
 
-    pub fn add_node(&mut self, node: Node) -> GraphNode {
-        let graph_node = Rc::new(RefCell::from(node));
+    pub fn add_node(&mut self) -> GraphNode {
+        let graph_node = Rc::new(RefCell::from(Node::new(self.next_id)));
         self.nodes.push(graph_node.clone());
+        self.next_id += 1;
 
         graph_node
     }

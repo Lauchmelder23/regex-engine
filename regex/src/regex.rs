@@ -1,6 +1,6 @@
-use std::rc::Rc;
+use std::{rc::Rc};
 
-use crate::{graph::{Graph, Edge, Node, State}, parser::{ParserError, self}};
+use crate::{graph::{Graph, GraphNode, Node, Edge, State}, parser::{ParserError, self}};
 
 #[derive(Debug)]
 pub struct Regex {
@@ -16,6 +16,7 @@ impl Regex {
 	/// 
 	/// # Examples
 	/// ```
+	/// use regex::regex::Regex;
 	/// let regex = Regex::new("Hell.* world");
 	/// ```
 	pub fn new(pattern: &str) -> Result<Regex, ParserError> {
@@ -26,7 +27,7 @@ impl Regex {
 		})
 	}
 
-	pub fn test(&self, input: &str) -> bool {
+	pub fn test(&self, input: &str) -> Option<usize> {
 		let safe_input = input.chars().map(u32::from).collect::<Vec<u32>>();
 		let mut stack: Vec<State> = vec![State {
 			node: self.graph.get_start_node(),
@@ -35,21 +36,30 @@ impl Regex {
 		
 		while !stack.is_empty() {
 			let state = match stack.pop() {
-				None => return false,
+				None => return None,
 				Some(item) => item
 			};
 
-			if state.node.borrow().is_empty() {
-				return true;
-			}
-
 			let node = state.node.borrow();
+
+			if node.is_empty() {
+				return Some(state.pos);
+			}
+			
+			/* 
+			println!("[{}] = {} : Node {}", 
+				state.pos, 
+				input.chars().nth(state.pos).unwrap_or(' '),
+				node
+			);
+			*/
+
 			node.get_edges().for_each(|edge| match edge.try_traverse(&safe_input, &state) {
 				None => {},
 				Some(new_state) => stack.push(new_state)
 			})
 		}
 
-		false
+		None
 	}
 }
