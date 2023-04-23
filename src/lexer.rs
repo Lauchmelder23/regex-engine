@@ -8,10 +8,27 @@ pub enum CharacterClass {
 }
 
 #[derive(Debug)]
+pub enum CaptureGroupType {
+    Normal,
+    Anonymous,
+    Named(String),
+    PositiveLookahead,
+    NegativeLookahead,
+    PositiveLookbehind,
+    NegativeLookbehind
+}
+
+#[derive(Debug)]
 pub enum Token {
     Character(char),
     CharacterRange(char, char),
     CharacterClass(CharacterClass, bool),
+
+    CharacterClassStart(bool),
+    CharacterClassEnd,
+
+    CaptureGroupStart(CaptureGroupType),
+    CaptureGroupEnd
 }
 
 #[derive(Debug)]
@@ -120,6 +137,40 @@ where
             }
         }
     }
+
+    fn handle_character_class_start(&mut self) -> Option<Token> {
+        // consume [ character
+        self.scanner.next();
+
+        // see if there is a ^ following the [
+        let negate = self.scanner.next_if(|&c| c == '^').is_some();
+        Some(Token::CharacterClassStart(negate))
+    }
+
+    fn handle_capture_group_start(&mut self) -> Option<Token> {
+        // consume ( character
+        self.scanner.next();
+
+        Some(Token::CaptureGroupStart(
+            match self.scanner.next_if(|&c| c == '?') {
+                None => CaptureGroupType::Normal,
+                Some(_) => self.get_capture_group_type()?
+            }
+        ))
+    }
+
+    fn get_capture_group_type(&mut self) -> Option<CaptureGroupType> {
+        Some(match self.scanner.next()? {
+            ':' => CaptureGroupType::Anonymous,
+            '!' => CaptureGroupType::NegativeLookahead,
+            '=' => CaptureGroupType::PositiveLookahead,
+
+            _ => {
+                eprintln!("Unexpected token after ?");
+                return None;
+            }
+        })
+    }
 }
 
 impl<I> Iterator for Lexer<I>
@@ -140,10 +191,10 @@ where
             '*' => todo!(),
             '+' => todo!(),
             '?' => todo!(),
-            '(' => todo!(),
-            ')' => todo!(),
-            '[' => todo!(),
-            ']' => todo!(),
+            '(' => self.handle_capture_group_start(),
+            ')' => { self.scanner.next(); Some(Token::CaptureGroupEnd)},
+            '[' => self.handle_character_class_start(),
+            ']' => { self.scanner.next(); Some(Token::CharacterClassEnd) },
             '{' => todo!(),
             '}' => todo!(),
             '|' => todo!(),
