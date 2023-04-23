@@ -1,9 +1,17 @@
 use std::iter::Peekable;
 
 #[derive(Debug)]
+pub enum CharacterClass {
+    Digit,
+    Whitespace,
+    WordCharacter
+}
+
+#[derive(Debug)]
 pub enum Token {
     Character(char),
-    CharacterRange(char, char)
+    CharacterRange(char, char),
+    CharacterClass(CharacterClass, bool),
 }
 
 #[derive(Debug)]
@@ -24,6 +32,32 @@ where
         }
     }
 
+    fn read_integer(&mut self, radix: u32) -> Option<u32> {
+        match u32::from_str_radix(self.scanner.by_ref().take_while(|c| c.is_digit(radix)).collect::<String>().to_owned().as_str(), radix) {
+            Ok(result) => Some(result),
+            Err(e) => {
+                eprintln!("Failed to read DecimalIntgegerLiteral: {e}");
+                None
+            }
+        }
+    }
+
+    fn read_hex_number(&mut self, hex_digits: usize) -> Option<u32> {
+        let number_string = self.scanner.by_ref().take(hex_digits).collect::<String>();
+
+        if number_string.len() != hex_digits {
+            return None;
+        }
+
+        match u32::from_str_radix(number_string.as_str(), 16) {
+            Ok(result) => Some(result),
+            Err(e) => {
+                eprintln!("Failed to read DecimalIntgegerLiteral: {e}");
+                None
+            }
+        }
+    }
+
     fn handle_character(&mut self) -> Option<Token> {
         let character = self.scanner.next()?;
 
@@ -34,6 +68,57 @@ where
         }
 
         Some(Token::Character(character))
+    }
+
+    fn handle_escape(&mut self) -> Option<Token> {
+        // discard leading backslash
+        self.scanner.next()?;
+
+        let escapee = self.scanner.peek()?.to_ascii_lowercase();
+
+        if "dsw".contains(escapee) {
+            return self.handle_character_class_escape();
+        }
+
+        if escapee.is_digit(10) {
+            return Some(Token::Character(char::from_u32(self.read_integer(10)?)?))
+        }
+
+        self.handle_character_escape()
+    }
+
+    fn handle_character_class_escape(&mut self) -> Option<Token> {
+        match self.scanner.next()? {
+            'd' => Some(Token::CharacterClass(CharacterClass::Digit, false)),
+            'D' => Some(Token::CharacterClass(CharacterClass::Digit, true)),
+            's' => Some(Token::CharacterClass(CharacterClass::Whitespace, false)),
+            'S' => Some(Token::CharacterClass(CharacterClass::Whitespace, true)),
+            'w' => Some(Token::CharacterClass(CharacterClass::WordCharacter, false)),
+            'W' => Some(Token::CharacterClass(CharacterClass::WordCharacter, true)),
+            _ => panic!()
+        }
+    }
+
+    fn handle_character_escape(&mut self) -> Option<Token> {
+        match self.scanner.next()? {
+            'f' => Some(Token::Character(char::from_u32(12)?)),
+            'n' => Some(Token::Character('\n')),
+            'r' => Some(Token::Character('\r')),
+            't' => Some(Token::Character('\t')),
+            'v' => Some(Token::Character(char::from_u32(11)?)),
+
+            'c' => {
+                eprintln!("Control sequences are not supported yet");
+                None
+            }
+
+            'x' => Some(Token::Character(char::from_u32(self.read_hex_number(2)?)?)),
+            'u' => Some(Token::Character(char::from_u32(self.read_hex_number(4)?)?)),
+            c => {
+                eprintln!("Invalid escape sequence '\\{c}'");
+                None
+            }
+        }
     }
 }
 
@@ -50,7 +135,7 @@ where
             '-' => todo!(),
             '^' => todo!(),
             '$' => todo!(),
-            '\\' => todo!(),
+            '\\' => self.handle_escape(),
             '.' => todo!(),
             '*' => todo!(),
             '+' => todo!(),
