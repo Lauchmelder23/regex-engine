@@ -152,6 +152,7 @@ where
         self.scanner.next();
 
         Some(Token::CaptureGroupStart(
+            // Ist das Some(char) oder kann das weg?
             match self.scanner.next_if(|&c| c == '?') {
                 None => CaptureGroupType::Normal,
                 Some(_) => self.get_capture_group_type()?
