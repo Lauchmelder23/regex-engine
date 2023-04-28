@@ -50,7 +50,7 @@ where
     }
 
     fn read_integer(&mut self, radix: u32) -> Option<u32> {
-        match u32::from_str_radix(self.scanner.by_ref().take_while(|c| c.is_digit(radix)).collect::<String>().to_owned().as_str(), radix) {
+        match u32::from_str_radix(self.scanner.by_ref().take_while(|c| c.is_digit(radix)).collect::<String>().as_str(), radix) {
             Ok(result) => Some(result),
             Err(e) => {
                 eprintln!("Failed to read DecimalIntgegerLiteral: {e}");
